@@ -12,6 +12,7 @@ from znotion.errors import (
     NotionServerError,
     NotionValidationError,
 )
+from znotion.pagination import Page, paginate
 
 __all__ = [
     "NotionAuthError",
@@ -24,4 +25,6 @@ __all__ = [
     "NotionRateLimitError",
     "NotionServerError",
     "NotionValidationError",
+    "Page",
+    "paginate",
 ]
