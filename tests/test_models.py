@@ -7,12 +7,19 @@ from pydantic import TypeAdapter
 
 from znotion.models import (
     Annotations,
+    BulletedListItemBlock,
+    CodeBlock,
+    DatabaseObject,
     DatabaseParent,
     EmojiObject,
     ExternalFile,
     FileObject,
+    GenericBlock,
+    Heading1Block,
     Icon,
     InternalFile,
+    PageObject,
+    ParagraphBlock,
     Parent,
     PropertySchema,
     PropertyValue,
@@ -20,6 +27,8 @@ from znotion.models import (
     RichTextEquation,
     RichTextText,
     SelectOption,
+    ToDoBlock,
+    block_adapter,
 )
 
 PropertyValueAdapter: TypeAdapter[Any] = TypeAdapter(PropertyValue)
@@ -429,3 +438,241 @@ def test_property_schema_extra_fields_preserved():
     parsed = _roundtrip_adapter(PropertySchemaAdapter, sample)
     dumped = PropertySchemaAdapter.dump_python(parsed, exclude_unset=True)
     assert dumped["future_thing"] == [1, 2, 3]
+
+
+# ---------------------------------------------------------------------------
+# PageObject round-trip
+# ---------------------------------------------------------------------------
+
+
+def _page_sample() -> dict[str, Any]:
+    return {
+        "object": "page",
+        "id": "11111111-1111-1111-1111-111111111111",
+        "created_time": "2026-04-14T12:00:00.000Z",
+        "last_edited_time": "2026-04-14T13:00:00.000Z",
+        "created_by": {"object": "user", "id": "user-1"},
+        "last_edited_by": {"object": "user", "id": "user-2"},
+        "cover": {
+            "type": "external",
+            "external": {"url": "https://example.com/cover.png"},
+        },
+        "icon": {"type": "emoji", "emoji": "📝"},
+        "parent": {"type": "database_id", "database_id": "db-abc"},
+        "archived": False,
+        "in_trash": False,
+        "url": "https://www.notion.so/Test-page-111",
+        "public_url": None,
+        "properties": {
+            "Name": {
+                "id": "title",
+                "type": "title",
+                "title": [
+                    {
+                        "type": "text",
+                        "text": {"content": "Hello", "link": None},
+                        "plain_text": "Hello",
+                        "href": None,
+                    }
+                ],
+            },
+            "Score": {"id": "score", "type": "number", "number": 99.5},
+            "Done": {"id": "done", "type": "checkbox", "checkbox": True},
+        },
+    }
+
+
+def test_page_object_roundtrip():
+    sample = _page_sample()
+    parsed = PageObject.model_validate(sample)
+    dumped = parsed.model_dump(exclude_unset=True, by_alias=True)
+    reparsed = PageObject.model_validate(dumped)
+    assert reparsed == parsed
+    assert parsed.id == "11111111-1111-1111-1111-111111111111"
+    assert parsed.parent.database_id == "db-abc"
+    assert parsed.icon is not None
+    assert isinstance(parsed.icon, EmojiObject)
+    assert parsed.properties["Name"].type == "title"
+    assert parsed.properties["Score"].number == 99.5
+
+
+def test_page_object_preserves_extra_fields():
+    sample = _page_sample()
+    sample["future_field"] = {"hello": "world"}
+    parsed = PageObject.model_validate(sample)
+    dumped = parsed.model_dump(exclude_unset=True)
+    assert dumped["future_field"] == {"hello": "world"}
+
+
+# ---------------------------------------------------------------------------
+# DatabaseObject round-trip
+# ---------------------------------------------------------------------------
+
+
+def _database_sample() -> dict[str, Any]:
+    return {
+        "object": "database",
+        "id": "22222222-2222-2222-2222-222222222222",
+        "created_time": "2026-04-14T10:00:00.000Z",
+        "last_edited_time": "2026-04-14T11:00:00.000Z",
+        "created_by": {"object": "user", "id": "user-3"},
+        "last_edited_by": {"object": "user", "id": "user-4"},
+        "title": [
+            {
+                "type": "text",
+                "text": {"content": "Tasks", "link": None},
+                "plain_text": "Tasks",
+                "href": None,
+            }
+        ],
+        "description": [],
+        "icon": None,
+        "cover": None,
+        "parent": {"type": "page_id", "page_id": "parent-page"},
+        "url": "https://www.notion.so/Tasks-222",
+        "public_url": None,
+        "archived": False,
+        "in_trash": False,
+        "is_inline": False,
+        "properties": {
+            "Name": {"id": "title", "name": "Name", "type": "title", "title": {}},
+            "Status": {
+                "id": "status",
+                "name": "Status",
+                "type": "select",
+                "select": {
+                    "options": [
+                        {"id": "a", "name": "open", "color": "red"},
+                        {"id": "b", "name": "done", "color": "green"},
+                    ]
+                },
+            },
+        },
+    }
+
+
+def test_database_object_roundtrip():
+    sample = _database_sample()
+    parsed = DatabaseObject.model_validate(sample)
+    dumped = parsed.model_dump(exclude_unset=True, by_alias=True)
+    reparsed = DatabaseObject.model_validate(dumped)
+    assert reparsed == parsed
+    assert parsed.id == "22222222-2222-2222-2222-222222222222"
+    assert parsed.parent.page_id == "parent-page"
+    assert parsed.title[0].plain_text == "Tasks"
+    assert parsed.properties["Status"].type == "select"
+
+
+def test_database_object_preserves_extra_fields():
+    sample = _database_sample()
+    sample["future_field"] = [1, 2, 3]
+    parsed = DatabaseObject.model_validate(sample)
+    dumped = parsed.model_dump(exclude_unset=True)
+    assert dumped["future_field"] == [1, 2, 3]
+
+
+# ---------------------------------------------------------------------------
+# Block discriminated union
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("sample", "expected_cls"),
+    [
+        (
+            {
+                "object": "block",
+                "id": "b-1",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": {"content": "Hi", "link": None},
+                            "plain_text": "Hi",
+                            "href": None,
+                        }
+                    ],
+                    "color": "default",
+                },
+                "has_children": False,
+                "archived": False,
+                "in_trash": False,
+            },
+            ParagraphBlock,
+        ),
+        (
+            {
+                "object": "block",
+                "id": "b-2",
+                "type": "heading_1",
+                "heading_1": {"rich_text": [], "color": "default", "is_toggleable": False},
+            },
+            Heading1Block,
+        ),
+        (
+            {
+                "object": "block",
+                "id": "b-3",
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {"rich_text": [], "color": "default"},
+            },
+            BulletedListItemBlock,
+        ),
+        (
+            {
+                "object": "block",
+                "id": "b-4",
+                "type": "to_do",
+                "to_do": {"rich_text": [], "checked": True, "color": "default"},
+            },
+            ToDoBlock,
+        ),
+        (
+            {
+                "object": "block",
+                "id": "b-5",
+                "type": "code",
+                "code": {
+                    "rich_text": [],
+                    "caption": [],
+                    "language": "python",
+                },
+            },
+            CodeBlock,
+        ),
+    ],
+)
+def test_block_variant_roundtrip(sample: dict[str, Any], expected_cls: type) -> None:
+    parsed = block_adapter.validate_python(sample)
+    assert isinstance(parsed, expected_cls)
+    dumped = block_adapter.dump_python(parsed, exclude_unset=True)
+    reparsed = block_adapter.validate_python(dumped)
+    assert reparsed == parsed
+
+
+def test_block_unknown_type_falls_back_to_generic():
+    sample = {
+        "object": "block",
+        "id": "b-x",
+        "type": "from_the_future",
+        "from_the_future": {"foo": "bar"},
+    }
+    parsed = block_adapter.validate_python(sample)
+    assert isinstance(parsed, GenericBlock)
+    assert parsed.type == "from_the_future"
+    dumped = block_adapter.dump_python(parsed, exclude_unset=True)
+    assert dumped["from_the_future"] == {"foo": "bar"}
+
+
+def test_block_extra_fields_preserved():
+    sample = {
+        "object": "block",
+        "id": "b-7",
+        "type": "paragraph",
+        "paragraph": {"rich_text": [], "color": "default"},
+        "future_envelope_field": "keep-me",
+    }
+    parsed = block_adapter.validate_python(sample)
+    dumped = block_adapter.dump_python(parsed, exclude_unset=True)
+    assert dumped["future_envelope_field"] == "keep-me"
