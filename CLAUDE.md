@@ -26,9 +26,12 @@ Live tests need `NOTION_TOKEN` and `NOTION_TEST_PAGE_ID` (in `.env` or env). Whe
 
 Three layers, top to bottom:
 
-1. **[NotionClient](znotion/client.py)** — async context manager that owns one `Transport` and instantiates each resource class as an attribute (`pages`, `databases`, `blocks`, `comments`, `search`, `file_uploads`). Token resolution lives in [config.py](znotion/config.py): explicit arg → `./.env` → `os.environ["NOTION_TOKEN"]`, else `NotionConfigError`.
+1. **[NotionClient](znotion/client.py)** — owns one `Transport` and instantiates each resource class as an attribute (`pages`, `databases`, `blocks`, `comments`, `search`, `file_uploads`). The primary usage is direct construction (`notion = NotionClient()`); `async with NotionClient() as notion:` is the pooled-connection variant — see Transport below. Token resolution lives in [config.py](znotion/config.py): explicit arg → `./.env` → `os.environ["NOTION_TOKEN"]`, else `NotionConfigError`.
 
-2. **[Transport](znotion/http.py)** — thin wrapper around a single `httpx.AsyncClient`. Injects `Authorization` and `Notion-Version` headers, raises `NotionError` subclasses for non-2xx responses (no retries). `Content-Type` is left to httpx so `json=` and `files=` bodies are encoded correctly. `post_multipart` is used by file uploads only.
+2. **[Transport](znotion/http.py)** — thin wrapper around `httpx.AsyncClient`. Injects `Authorization` and `Notion-Version` headers, raises `NotionError` subclasses for non-2xx responses (no retries). `Content-Type` is left to httpx so `json=` and `files=` bodies are encoded correctly. `post_multipart` is used by file uploads only.
+   - **Default** (no `async with`): `_client` stays `None`; each request spins up a short-lived `httpx.AsyncClient` in an inner `async with` and closes it immediately. No `close()` required — this is what lets callers do `client = NotionClient(...)` without committing to a context manager.
+   - **Pooled** (entered via `async with`): `__aenter__` creates a single `httpx.AsyncClient` and reuses it until `__aexit__` closes it. Preferred for any code that makes more than a couple of calls, since it avoids the per-request client setup cost.
+   - When adding new request methods, check `self._client is not None` and fall back to `self._new_client()` like the existing ones.
 
 3. **Resources** under [znotion/resources/](znotion/resources/) — one class per API surface. Every list endpoint exposes the pair:
    - `*_page(...)` → returns a `Page[T]` with `results / has_more / next_cursor` for manual cursor control.

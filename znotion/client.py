@@ -57,6 +57,7 @@ class NotionClient:
         await self._transport.close()
 
     async def __aenter__(self) -> Self:
+        await self._transport.__aenter__()
         return self
 
     async def __aexit__(

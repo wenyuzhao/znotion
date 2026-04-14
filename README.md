@@ -34,7 +34,7 @@ Set `NOTION_TOKEN` in the environment or in a `.env` file in the working directo
 
 ```sh
 # .env
-NOTION_TOKEN=secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+NOTION_TOKEN=ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 Token resolution order: explicit `token=` argument → `./.env` → `os.environ["NOTION_TOKEN"]`. A
@@ -47,24 +47,39 @@ from znotion import NotionClient
 
 
 async def main() -> None:
-    async with NotionClient() as notion:
-        page = await notion.pages.retrieve("PAGE_ID")
-        print(page.id, page.url)
+    notion = NotionClient()
+    page = await notion.pages.retrieve("PAGE_ID")
+    print(page.id, page.url)
 
 
 asyncio.run(main())
 ```
 
-Pass `token="secret_..."` explicitly to override environment/file lookup:
+Pass `token="ntn_..."` explicitly to override environment/file lookup:
 
 ```python
-async with NotionClient(token="secret_...") as notion:
-    ...
+notion = NotionClient(token="ntn_...")
+```
+
+### Reusing a pooled connection
+
+Constructing `NotionClient` directly as above is the simplest way to use the library: each
+request opens and closes its own short-lived `httpx.AsyncClient`, so there is nothing to clean
+up. If you are making more than a handful of requests, use `async with` instead — it creates a
+single pooled `httpx.AsyncClient` that is reused across every call, which is significantly
+faster:
+
+```python
+async with NotionClient() as notion:
+    page = await notion.pages.retrieve("PAGE_ID")
+    async for row in notion.databases.query("DATABASE_ID"):
+        print(row.id)
 ```
 
 ## Usage
 
-All examples below assume they run inside `async with NotionClient() as notion:`.
+All examples below assume a `notion = NotionClient()` bound at module or function scope (wrap
+in `async with NotionClient() as notion:` if you want connection pooling).
 
 ### Create a page
 
@@ -194,13 +209,13 @@ Every non-2xx response raises a subclass of `NotionError`:
 ```python
 from znotion import NotionClient, NotionNotFoundError, NotionRateLimitError
 
-async with NotionClient() as notion:
-    try:
-        await notion.pages.retrieve("missing-id")
-    except NotionNotFoundError as exc:
-        print("not found:", exc.message, exc.request_id)
-    except NotionRateLimitError:
-        ...
+notion = NotionClient()
+try:
+    await notion.pages.retrieve("missing-id")
+except NotionNotFoundError as exc:
+    print("not found:", exc.message, exc.request_id)
+except NotionRateLimitError:
+    ...
 ```
 
 The full set: `NotionValidationError` (400), `NotionAuthError` (401), `NotionForbiddenError`
