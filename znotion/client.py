@@ -14,6 +14,7 @@ from znotion.http import (
     DEFAULT_TIMEOUT,
     Transport,
 )
+from znotion.resources.databases import DatabasesResource
 from znotion.resources.pages import PagesResource
 
 
@@ -43,6 +44,7 @@ class NotionClient:
             transport=transport,
         )
         self.pages = PagesResource(self._transport)
+        self.databases = DatabasesResource(self._transport)
 
     async def close(self) -> None:
         await self._transport.close()

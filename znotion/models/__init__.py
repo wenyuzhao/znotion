@@ -9,6 +9,7 @@ from znotion.models.common import (
     PartialUser,
     SelectOption,
 )
+from znotion.models.databases import DatabaseObject
 from znotion.models.files import (
     Cover,
     ExternalFile,
@@ -112,6 +113,7 @@ __all__ = [
     "CreatedBySchema",
     "CreatedTimePropertyValue",
     "CreatedTimeSchema",
+    "DatabaseObject",
     "DatabaseParent",
     "DatePropertyValue",
     "DateSchema",
