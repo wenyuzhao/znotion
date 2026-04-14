@@ -12,15 +12,20 @@ from znotion.errors import (
     NotionServerError,
     NotionValidationError,
 )
+from znotion.models.blocks import Block, GenericBlock
 from znotion.models.databases import DatabaseObject
 from znotion.models.pages import PageObject, PropertyItem
 from znotion.pagination import Page, paginate
+from znotion.resources.blocks import BlocksResource
 from znotion.resources.databases import DatabasesResource
 from znotion.resources.pages import PagesResource
 
 __all__ = [
+    "Block",
+    "BlocksResource",
     "DatabaseObject",
     "DatabasesResource",
+    "GenericBlock",
     "NotionAuthError",
     "NotionClient",
     "NotionConfigError",
