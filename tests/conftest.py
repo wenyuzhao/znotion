@@ -9,6 +9,8 @@ Exposes:
       test must confine its mutations.
     * ``created_pages`` (function) — collect page ids during a test; they are
       archived in teardown via ``pages.update(archived=True)``.
+    * ``created_databases`` (function) — collect database ids during a test;
+      they are archived in teardown via ``databases.update(archived=True)``.
 
 Guardrail: the conftest never imports or exercises any users / workspace
 endpoint. Only ``client.pages.update`` (archival of ids the test explicitly
@@ -113,4 +115,18 @@ async def created_pages(notion: NotionClient) -> AsyncIterator[list[str]]:
             except NotionError:
                 # Teardown is best-effort: a failed archival should not mask
                 # the test's own assertion failure.
+                pass
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def created_databases(notion: NotionClient) -> AsyncIterator[list[str]]:
+    """Collect database ids during a test; archive them on teardown."""
+    ids: list[str] = []
+    try:
+        yield ids
+    finally:
+        for database_id in ids:
+            try:
+                await notion.databases.update(database_id, archived=True)
+            except NotionError:
                 pass
