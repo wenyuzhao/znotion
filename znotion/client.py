@@ -15,6 +15,7 @@ from znotion.http import (
     Transport,
 )
 from znotion.resources.blocks import BlocksResource
+from znotion.resources.comments import CommentsResource
 from znotion.resources.databases import DatabasesResource
 from znotion.resources.pages import PagesResource
 from znotion.resources.search import SearchResource
@@ -24,8 +25,7 @@ class NotionClient:
     """Async client for the Notion API.
 
     Resource surfaces (``pages``, ``databases``, ``blocks``, ``comments``,
-    ``file_uploads``) are implemented in later tasks; this task provides the
-    token/config plumbing and the underlying async HTTP transport.
+    ``search``, ``file_uploads``) are exposed as attributes on the client.
     """
 
     def __init__(
@@ -48,6 +48,7 @@ class NotionClient:
         self.pages = PagesResource(self._transport)
         self.databases = DatabasesResource(self._transport)
         self.blocks = BlocksResource(self._transport)
+        self.comments = CommentsResource(self._transport)
         self.search = SearchResource(self._transport)
 
     async def close(self) -> None:

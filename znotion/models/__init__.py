@@ -38,6 +38,7 @@ from znotion.models.blocks import (
     VideoBlock,
     block_adapter,
 )
+from znotion.models.comments import Comment
 from znotion.models.common import (
     Annotations,
     Color,
@@ -158,6 +159,7 @@ __all__ = [
     "Color",
     "ColumnBlock",
     "ColumnListBlock",
+    "Comment",
     "Cover",
     "CreatedByPropertyValue",
     "CreatedBySchema",
