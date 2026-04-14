@@ -59,16 +59,30 @@ class FileUploadsResource:
         file: bytes | IO[bytes],
         *,
         part_number: int | None = None,
+        filename: str | None = None,
+        content_type: str | None = None,
     ) -> FileUpload:
         """Upload bytes for a ``file_upload``.
 
         For ``single_part`` uploads call once with the whole payload. For
         ``multi_part`` uploads call once per part and pass ``part_number``
-        (1-indexed). ``file`` may be raw ``bytes``, a binary file object,
-        or an ``(filename, content, content_type)`` tuple — anything
-        ``httpx`` accepts in its ``files`` mapping.
+        (1-indexed). Pass ``content_type`` (and optionally ``filename``) to
+        tag the multipart file part — Notion rejects the request when the
+        part's content-type does not match the value declared in ``create``.
+        When neither is provided, httpx defaults the part to
+        ``application/octet-stream``.
         """
-        files: dict[str, Any] = {"file": file}
+        files: dict[str, Any]
+        if filename is not None or content_type is not None:
+            files = {
+                "file": (
+                    filename or "file",
+                    file,
+                    content_type or "application/octet-stream",
+                ),
+            }
+        else:
+            files = {"file": file}
         form: dict[str, Any] = {}
         if part_number is not None:
             form["part_number"] = str(part_number)
@@ -164,7 +178,12 @@ class FileUploadsResource:
             )
             with file_path.open("rb") as fh:
                 payload = fh.read()
-            return await self.send(upload.id, payload)
+            return await self.send(
+                upload.id,
+                payload,
+                filename=resolved_filename,
+                content_type=resolved_content_type,
+            )
 
         num_parts = max(1, math.ceil(size / part_size))
         upload = await self.create(
@@ -178,5 +197,11 @@ class FileUploadsResource:
                 chunk = fh.read(part_size)
                 if not chunk:
                     break
-                await self.send(upload.id, chunk, part_number=part_number)
+                await self.send(
+                    upload.id,
+                    chunk,
+                    part_number=part_number,
+                    filename=resolved_filename,
+                    content_type=resolved_content_type,
+                )
         return await self.complete(upload.id)
