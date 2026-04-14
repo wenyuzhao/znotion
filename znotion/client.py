@@ -1,16 +1,57 @@
-"""NotionClient — top-level async client (implemented in later tasks)."""
+"""NotionClient — top-level async client."""
 
 from __future__ import annotations
 
+from types import TracebackType
+from typing import Self
+
+import httpx
+
 from znotion.config import load_token
+from znotion.http import (
+    DEFAULT_BASE_URL,
+    DEFAULT_NOTION_VERSION,
+    DEFAULT_TIMEOUT,
+    Transport,
+)
 
 
 class NotionClient:
     """Async client for the Notion API.
 
-    HTTP, retry, and resource surfaces are implemented in later tasks; this
-    task only wires up token resolution so construction can be exercised.
+    Resource surfaces (``pages``, ``databases``, ``blocks``, ``comments``,
+    ``file_uploads``) are implemented in later tasks; this task provides the
+    token/config plumbing and the underlying async HTTP transport.
     """
 
-    def __init__(self, token: str | None = None) -> None:
+    def __init__(
+        self,
+        token: str | None = None,
+        *,
+        base_url: str = DEFAULT_BASE_URL,
+        notion_version: str = DEFAULT_NOTION_VERSION,
+        timeout: float = DEFAULT_TIMEOUT,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self._token: str = load_token(token)
+        self._transport = Transport(
+            self._token,
+            base_url=base_url,
+            notion_version=notion_version,
+            timeout=timeout,
+            transport=transport,
+        )
+
+    async def close(self) -> None:
+        await self._transport.close()
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        await self.close()
