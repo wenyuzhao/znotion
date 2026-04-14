@@ -15,10 +15,12 @@ from znotion.errors import (
 from znotion.models.blocks import Block, GenericBlock
 from znotion.models.databases import DatabaseObject
 from znotion.models.pages import PageObject, PropertyItem
+from znotion.models.search import SearchResult
 from znotion.pagination import Page, paginate
 from znotion.resources.blocks import BlocksResource
 from znotion.resources.databases import DatabasesResource
 from znotion.resources.pages import PagesResource
+from znotion.resources.search import SearchResource
 
 __all__ = [
     "Block",
@@ -40,5 +42,7 @@ __all__ = [
     "PageObject",
     "PagesResource",
     "PropertyItem",
+    "SearchResource",
+    "SearchResult",
     "paginate",
 ]

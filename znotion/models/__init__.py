@@ -137,6 +137,7 @@ from znotion.models.rich_text import (
     RichTextText,
     TextContent,
 )
+from znotion.models.search import SearchResult, search_result_adapter
 
 __all__ = [
     "Annotations",
@@ -234,6 +235,7 @@ __all__ = [
     "RollupPropertyValue",
     "RollupSchema",
     "RollupSchemaConfig",
+    "SearchResult",
     "SelectOption",
     "SelectPropertyValue",
     "SelectSchema",
@@ -265,4 +267,5 @@ __all__ = [
     "VideoBlock",
     "WorkspaceParent",
     "block_adapter",
+    "search_result_adapter",
 ]
