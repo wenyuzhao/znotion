@@ -17,6 +17,7 @@ from znotion.http import (
 from znotion.resources.blocks import BlocksResource
 from znotion.resources.comments import CommentsResource
 from znotion.resources.databases import DatabasesResource
+from znotion.resources.file_uploads import FileUploadsResource
 from znotion.resources.pages import PagesResource
 from znotion.resources.search import SearchResource
 
@@ -50,6 +51,7 @@ class NotionClient:
         self.blocks = BlocksResource(self._transport)
         self.comments = CommentsResource(self._transport)
         self.search = SearchResource(self._transport)
+        self.file_uploads = FileUploadsResource(self._transport)
 
     async def close(self) -> None:
         await self._transport.close()

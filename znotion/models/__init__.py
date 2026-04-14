@@ -49,6 +49,7 @@ from znotion.models.common import (
     SelectOption,
 )
 from znotion.models.databases import DatabaseObject
+from znotion.models.file_uploads import FileUpload
 from znotion.models.files import (
     Cover,
     ExternalFile,
@@ -181,6 +182,7 @@ __all__ = [
     "ExternalFileData",
     "FileBlock",
     "FileObject",
+    "FileUpload",
     "FileUploadRef",
     "FileUploadRefData",
     "FilesPropertyValue",

@@ -17,9 +17,12 @@ DEFAULT_TIMEOUT = 30.0
 class Transport:
     """Thin async wrapper around :class:`httpx.AsyncClient`.
 
-    Injects the Notion auth header, API version, and JSON content type on
-    every request, and raises :class:`NotionError` subclasses for non-2xx
-    responses. No retry logic.
+    Injects the Notion auth header and API version on every request, and
+    raises :class:`NotionError` subclasses for non-2xx responses. The
+    ``Content-Type`` header is left to ``httpx`` to set per-request — its
+    encoders pick ``application/json`` for ``json=`` bodies and the proper
+    ``multipart/form-data; boundary=...`` for ``files=`` bodies. No retry
+    logic.
     """
 
     def __init__(
@@ -40,7 +43,6 @@ class Transport:
             headers={
                 "Authorization": f"Bearer {token}",
                 "Notion-Version": notion_version,
-                "Content-Type": "application/json",
             },
             timeout=timeout,
             transport=transport,
@@ -112,3 +114,28 @@ class Transport:
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return await self.request("DELETE", path, params=params)
+
+    async def post_multipart(
+        self,
+        path: str,
+        *,
+        files: dict[str, Any],
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """POST a ``multipart/form-data`` request and return the parsed JSON.
+
+        Used by the File Uploads API to send file part bytes. ``files`` is
+        passed through to ``httpx`` (which handles ``bytes``, file-like
+        objects, and ``(filename, content, content_type)`` tuples) and
+        ``data`` carries any extra form fields (e.g. ``part_number``).
+        """
+        response = await self._client.post(path, files=files, data=data)
+        if response.status_code >= 400:
+            raise NotionError.from_response(response)
+        result = response.json()
+        if not isinstance(result, dict):
+            raise NotionError(
+                f"Expected JSON object from POST {path}, got {type(result).__name__}",
+                status=response.status_code,
+            )
+        return result

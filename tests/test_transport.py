@@ -49,7 +49,7 @@ async def test_sends_required_headers_on_get():
     assert result == {"object": "page", "id": "abc"}
     assert seen["authorization"] == "Bearer secret_test_token"
     assert seen["notion-version"] == DEFAULT_NOTION_VERSION
-    assert seen["content-type"] == "application/json"
+    assert seen["content-type"] is None
     assert seen["url"] == f"{DEFAULT_BASE_URL}/pages/abc"
     assert seen["method"] == "GET"
 
