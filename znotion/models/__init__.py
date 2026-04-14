@@ -20,6 +20,7 @@ from znotion.models.files import (
     InternalFile,
     InternalFileData,
 )
+from znotion.models.pages import PageObject, PropertyItem
 from znotion.models.parent import (
     BlockParent,
     DatabaseParent,
@@ -143,6 +144,7 @@ __all__ = [
     "NumberPropertyValue",
     "NumberSchema",
     "NumberSchemaConfig",
+    "PageObject",
     "PageParent",
     "Parent",
     "PartialUser",
@@ -150,6 +152,7 @@ __all__ = [
     "PeopleSchema",
     "PhoneNumberPropertyValue",
     "PhoneNumberSchema",
+    "PropertyItem",
     "PropertySchema",
     "PropertyValue",
     "RelationItem",

@@ -12,7 +12,9 @@ from znotion.errors import (
     NotionServerError,
     NotionValidationError,
 )
+from znotion.models.pages import PageObject, PropertyItem
 from znotion.pagination import Page, paginate
+from znotion.resources.pages import PagesResource
 
 __all__ = [
     "NotionAuthError",
@@ -26,5 +28,8 @@ __all__ = [
     "NotionServerError",
     "NotionValidationError",
     "Page",
+    "PageObject",
+    "PagesResource",
+    "PropertyItem",
     "paginate",
 ]
