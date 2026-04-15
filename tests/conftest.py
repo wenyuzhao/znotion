@@ -8,9 +8,9 @@ Exposes:
     * ``test_page_id`` (module) — root test page id under which every live
       test must confine its mutations.
     * ``created_pages`` (function) — collect page ids during a test; they are
-      archived in teardown via ``pages.update(archived=True)``.
+      archived in teardown via ``pages.update(in_trash=True)``.
     * ``created_databases`` (function) — collect database ids during a test;
-      they are archived in teardown via ``databases.update(archived=True)``.
+      they are archived in teardown via ``databases.update(in_trash=True)``.
 
 Guardrail: the conftest never imports or exercises any users / workspace
 endpoint. Only ``client.pages.update`` (archival of ids the test explicitly
@@ -111,7 +111,7 @@ async def created_pages(notion: NotionClient) -> AsyncIterator[list[str]]:
     finally:
         for page_id in ids:
             try:
-                await notion.pages.update(page_id, archived=True)
+                await notion.pages.update(page_id, in_trash=True)
             except NotionError:
                 # Teardown is best-effort: a failed archival should not mask
                 # the test's own assertion failure.
@@ -127,6 +127,6 @@ async def created_databases(notion: NotionClient) -> AsyncIterator[list[str]]:
     finally:
         for database_id in ids:
             try:
-                await notion.databases.update(database_id, archived=True)
+                await notion.databases.update(database_id, in_trash=True)
             except NotionError:
                 pass

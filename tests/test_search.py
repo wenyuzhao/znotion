@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 
 from znotion import (
-    DatabaseObject,
+    DataSourceObject,
     NotionClient,
     Page,
     PageObject,
@@ -23,25 +23,24 @@ def _page_payload(*, page_id: str = "p1") -> dict[str, Any]:
         "created_time": "2024-01-01T00:00:00.000Z",
         "last_edited_time": "2024-01-02T00:00:00.000Z",
         "parent": {"type": "workspace", "workspace": True},
-        "archived": False,
+        "is_archived": False,
         "in_trash": False,
         "properties": {},
     }
 
 
-def _database_payload(*, database_id: str = "db1") -> dict[str, Any]:
+def _data_source_payload(*, data_source_id: str = "ds1") -> dict[str, Any]:
     return {
-        "object": "database",
-        "id": database_id,
+        "object": "data_source",
+        "id": data_source_id,
         "created_time": "2024-01-01T00:00:00.000Z",
         "last_edited_time": "2024-01-02T00:00:00.000Z",
         "title": [],
         "description": [],
         "icon": None,
         "cover": None,
-        "parent": {"type": "workspace", "workspace": True},
-        "url": f"https://www.notion.so/{database_id}",
-        "archived": False,
+        "parent": {"type": "database_id", "database_id": "db-1"},
+        "url": f"https://www.notion.so/{data_source_id}",
         "in_trash": False,
         "is_inline": False,
         "properties": {},
@@ -63,10 +62,10 @@ async def test_search_page_posts_payload_and_parses_mixed_results() -> None:
             200,
             json={
                 "object": "list",
-                "type": "page_or_database",
+                "type": "page_or_data_source",
                 "results": [
                     _page_payload(page_id="p1"),
-                    _database_payload(database_id="db1"),
+                    _data_source_payload(data_source_id="ds1"),
                 ],
                 "next_cursor": None,
                 "has_more": False,
@@ -93,8 +92,8 @@ async def test_search_page_posts_payload_and_parses_mixed_results() -> None:
     assert len(result.results) == 2
     assert isinstance(result.results[0], PageObject)
     assert result.results[0].id == "p1"
-    assert isinstance(result.results[1], DatabaseObject)
-    assert result.results[1].id == "db1"
+    assert isinstance(result.results[1], DataSourceObject)
+    assert result.results[1].id == "ds1"
 
 
 async def test_search_page_omits_empty_body() -> None:
@@ -139,7 +138,7 @@ async def test_search_page_forwards_start_cursor() -> None:
     assert seen["body"] == {"start_cursor": "cur-x"}
 
 
-async def test_search_page_filter_database_only() -> None:
+async def test_search_page_filter_data_source_only() -> None:
     seen: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -148,7 +147,7 @@ async def test_search_page_filter_database_only() -> None:
             200,
             json={
                 "object": "list",
-                "results": [_database_payload(database_id="db2")],
+                "results": [_data_source_payload(data_source_id="ds2")],
                 "next_cursor": None,
                 "has_more": False,
             },
@@ -156,12 +155,14 @@ async def test_search_page_filter_database_only() -> None:
 
     async with _make_client(handler) as client:
         result = await client.search.search_page(
-            filter={"property": "object", "value": "database"},
+            filter={"property": "object", "value": "data_source"},
         )
 
-    assert seen["body"] == {"filter": {"property": "object", "value": "database"}}
+    assert seen["body"] == {
+        "filter": {"property": "object", "value": "data_source"},
+    }
     assert len(result.results) == 1
-    assert isinstance(result.results[0], DatabaseObject)
+    assert isinstance(result.results[0], DataSourceObject)
 
 
 async def test_search_auto_paginates_across_pages() -> None:
@@ -177,7 +178,7 @@ async def test_search_auto_paginates_across_pages() -> None:
                     "object": "list",
                     "results": [
                         _page_payload(page_id="p1"),
-                        _database_payload(database_id="db1"),
+                        _data_source_payload(data_source_id="ds1"),
                     ],
                     "next_cursor": "cursor-2",
                     "has_more": True,
@@ -201,9 +202,9 @@ async def test_search_auto_paginates_across_pages() -> None:
         )
         items = [item async for item in iterator]
 
-    assert [item.id for item in items] == ["p1", "db1", "p2"]
+    assert [item.id for item in items] == ["p1", "ds1", "p2"]
     assert isinstance(items[0], PageObject)
-    assert isinstance(items[1], DatabaseObject)
+    assert isinstance(items[1], DataSourceObject)
     assert isinstance(items[2], PageObject)
     assert len(call_bodies) == 2
     assert call_bodies[0]["query"] == "thing"

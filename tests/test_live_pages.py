@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from znotion import NotionClient, PageObject, PropertyItem
+from znotion import NotionClient, PageMarkdown, PageObject, PropertyItem
 
 pytestmark = [pytest.mark.live, pytest.mark.asyncio(loop_scope="session")]
 
@@ -34,7 +34,7 @@ async def test_pages_full_lifecycle(
     assert isinstance(created, PageObject)
     assert created.id
     created_pages.append(created.id)
-    assert created.archived is False
+    assert created.in_trash is False
     assert created.icon is not None
 
     fetched = await notion.pages.retrieve(created.id)
@@ -53,9 +53,9 @@ async def test_pages_full_lifecycle(
     updated_icon = updated.icon.model_dump(mode="json", exclude_none=True)
     assert updated_icon.get("emoji") == "✅"
 
-    archived = await notion.pages.update(created.id, archived=True)
-    assert isinstance(archived, PageObject)
-    assert archived.archived is True
+    trashed = await notion.pages.update(created.id, in_trash=True)
+    assert isinstance(trashed, PageObject)
+    assert trashed.in_trash is True
 
 
 async def test_pages_retrieve_property_title(
@@ -86,3 +86,45 @@ async def test_pages_retrieve_property_title(
     items = [item async for item in iter_or_item]
     assert len(items) >= 1
     assert all(isinstance(item, PropertyItem) for item in items)
+
+
+async def test_pages_markdown_roundtrip(
+    notion: NotionClient,
+    test_page_id: str,
+    created_pages: list[str],
+) -> None:
+    """Create from markdown → retrieve as markdown → update_markdown →
+    replace_markdown, confining all mutations under the test page."""
+    created = await notion.pages.create_from_markdown(
+        parent={"type": "page_id", "page_id": test_page_id},
+        markdown=(
+            "# znotion markdown live test\n\n"
+            "First paragraph with token ALPHA.\n\n"
+            "Second paragraph unchanged.\n"
+        ),
+    )
+    assert isinstance(created, PageObject)
+    created_pages.append(created.id)
+
+    fetched = await notion.pages.retrieve_markdown(created.id)
+    assert isinstance(fetched, PageMarkdown)
+    assert fetched.id.replace("-", "") == created.id.replace("-", "")
+    assert "ALPHA" in fetched.markdown
+    assert "Second paragraph unchanged." in fetched.markdown
+
+    updated = await notion.pages.update_markdown(
+        created.id,
+        [{"old_str": "ALPHA", "new_str": "BETA"}],
+    )
+    assert isinstance(updated, PageMarkdown)
+    assert "BETA" in updated.markdown
+    assert "ALPHA" not in updated.markdown
+
+    replaced = await notion.pages.replace_markdown(
+        created.id,
+        "# znotion markdown live test\n\nWhole new body.\n",
+        allow_deleting_content=True,
+    )
+    assert isinstance(replaced, PageMarkdown)
+    assert "Whole new body." in replaced.markdown
+    assert "Second paragraph unchanged." not in replaced.markdown

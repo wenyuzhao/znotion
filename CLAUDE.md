@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`znotion` is an async Python SDK for the Notion API (`2022-06-28`), built on `httpx` and `pydantic` v2. Requires Python 3.14+. Managed exclusively with `uv` — `pip` is not supported.
+`znotion` is an async Python SDK for the Notion API (`2026-03-11`), built on `httpx` and `pydantic` v2. Requires Python 3.14+. Managed exclusively with `uv` — `pip` is not supported.
 
-In-scope APIs: Pages, Databases, Blocks, Comments, Search, File Uploads. **Out of scope and must not be added**: the Users API and OAuth endpoints. Only internal-integration-token auth is supported.
+In-scope APIs: Pages, Databases, Data Sources, Blocks, Comments, Search, File Uploads. **Out of scope and must not be added**: the Users API and OAuth endpoints. Only internal-integration-token auth is supported.
+
+Notion `2025-09-03+` split databases from data sources: a database is a thin container whose property schema and query endpoint live on its data source(s). `client.databases` handles the container (`create`/`retrieve`/`update`), and `client.data_sources` handles schema and `query`. `databases.create(properties=...)` is auto-wrapped into `initial_data_source.properties`. Page parents inside a database now use `{"type": "data_source_id", "data_source_id": ...}`.
 
 ## Commands
 
@@ -26,7 +28,7 @@ Live tests need `NOTION_TOKEN` and `NOTION_TEST_PAGE_ID` (in `.env` or env). Whe
 
 Three layers, top to bottom:
 
-1. **[NotionClient](znotion/client.py)** — owns one `Transport` and instantiates each resource class as an attribute (`pages`, `databases`, `blocks`, `comments`, `search`, `file_uploads`). The primary usage is direct construction (`notion = NotionClient()`); `async with NotionClient() as notion:` is the pooled-connection variant — see Transport below. Token resolution lives in [config.py](znotion/config.py): explicit arg → `./.env` → `os.environ["NOTION_TOKEN"]`, else `NotionConfigError`.
+1. **[NotionClient](znotion/client.py)** — owns one `Transport` and instantiates each resource class as an attribute (`pages`, `databases`, `data_sources`, `blocks`, `comments`, `search`, `file_uploads`). The primary usage is direct construction (`notion = NotionClient()`); `async with NotionClient() as notion:` is the pooled-connection variant — see Transport below. Token resolution lives in [config.py](znotion/config.py): explicit arg → `./.env` → `os.environ["NOTION_TOKEN"]`, else `NotionConfigError`.
 
 2. **[Transport](znotion/http.py)** — thin wrapper around `httpx.AsyncClient`. Injects `Authorization` and `Notion-Version` headers, raises `NotionError` subclasses for non-2xx responses (no retries). `Content-Type` is left to httpx so `json=` and `files=` bodies are encoded correctly. `post_multipart` is used by file uploads only.
    - **Default** (no `async with`): `_client` stays `None`; each request spins up a short-lived `httpx.AsyncClient` in an inner `async with` and closes it immediately. No `close()` required — this is what lets callers do `client = NotionClient(...)` without committing to a context manager.
@@ -35,7 +37,7 @@ Three layers, top to bottom:
 
 3. **Resources** under [znotion/resources/](znotion/resources/) — one class per API surface. Every list endpoint exposes the pair:
    - `*_page(...)` → returns a `Page[T]` with `results / has_more / next_cursor` for manual cursor control.
-   - bare method (e.g. `databases.query`, `blocks.children`, `comments.list`) → returns an `AsyncIterator[T]` that auto-paginates via [paginate()](znotion/pagination.py) (or an inline generator for `file_uploads.list`). When adding a new list endpoint, preserve this `*_page` + iterator pair.
+   - bare method (e.g. `data_sources.query`, `blocks.children`, `comments.list`) → returns an `AsyncIterator[T]` that auto-paginates via [paginate()](znotion/pagination.py) (or an inline generator for `file_uploads.list`). When adding a new list endpoint, preserve this `*_page` + iterator pair.
 
 ### Models
 
@@ -53,5 +55,5 @@ Three layers, top to bottom:
 
 [tests/conftest.py](tests/conftest.py) is the safety boundary for live tests:
 - All mutations must be confined to descendants of the `test_page_id` fixture (the `NOTION_TEST_PAGE_ID` page).
-- Use the `created_pages` / `created_databases` fixtures to register ids — they are archived in teardown via `pages.update(archived=True)` / `databases.update(archived=True)`.
+- Use the `created_pages` / `created_databases` fixtures to register ids — they are trashed in teardown via `pages.update(in_trash=True)` / `databases.update(in_trash=True)`.
 - The conftest must never import or exercise any Users or workspace endpoint. Keep it that way.

@@ -98,4 +98,4 @@ async def test_blocks_full_lifecycle(
 
     after_delete = [block async for block in notion.blocks.children(parent.id, page_size=2)]
     divider_after = next((b for b in after_delete if b.id == divider_id), None)
-    assert divider_after is None or divider_after.archived is True
+    assert divider_after is None or divider_after.in_trash is True

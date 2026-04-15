@@ -14,13 +14,15 @@ from znotion.errors import (
 )
 from znotion.models.blocks import Block, GenericBlock
 from znotion.models.comments import Comment
-from znotion.models.databases import DatabaseObject
+from znotion.models.data_sources import DataSourceObject
+from znotion.models.databases import DatabaseObject, DataSourceRef
 from znotion.models.file_uploads import FileUpload
-from znotion.models.pages import PageObject, PropertyItem
+from znotion.models.pages import PageMarkdown, PageObject, PropertyItem
 from znotion.models.search import SearchResult
 from znotion.pagination import Page, paginate
 from znotion.resources.blocks import BlocksResource
 from znotion.resources.comments import CommentsResource
+from znotion.resources.data_sources import DataSourcesResource
 from znotion.resources.databases import DatabasesResource
 from znotion.resources.file_uploads import FileUploadsResource
 from znotion.resources.pages import PagesResource
@@ -31,6 +33,9 @@ __all__ = [
     "BlocksResource",
     "Comment",
     "CommentsResource",
+    "DataSourceObject",
+    "DataSourceRef",
+    "DataSourcesResource",
     "DatabaseObject",
     "DatabasesResource",
     "FileUpload",
@@ -47,6 +52,7 @@ __all__ = [
     "NotionServerError",
     "NotionValidationError",
     "Page",
+    "PageMarkdown",
     "PageObject",
     "PagesResource",
     "PropertyItem",

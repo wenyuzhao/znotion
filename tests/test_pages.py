@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 import pytest
 
-from znotion import NotionClient, Page, PageObject, PropertyItem
+from znotion import NotionClient, Page, PageMarkdown, PageObject, PropertyItem
 from znotion.models.parent import PageParent
 
 
@@ -18,7 +18,7 @@ def _page_payload(
     page_id: str = "page-123",
     parent_id: str = "parent-1",
     title_text: str = "hello",
-    archived: bool = False,
+    is_archived: bool = False,
 ) -> dict[str, Any]:
     return {
         "object": "page",
@@ -28,7 +28,7 @@ def _page_payload(
         "created_by": {"object": "user", "id": "u1"},
         "last_edited_by": {"object": "user", "id": "u2"},
         "parent": {"type": "page_id", "page_id": parent_id},
-        "archived": archived,
+        "is_archived": is_archived,
         "in_trash": False,
         "url": f"https://www.notion.so/{page_id}",
         "properties": {
@@ -113,22 +113,22 @@ async def test_update_patches_only_provided_fields() -> None:
         seen["method"] = request.method
         seen["path"] = request.url.path
         seen["body"] = json.loads(request.content)
-        return httpx.Response(200, json=_page_payload(archived=True))
+        return httpx.Response(200, json=_page_payload(is_archived=True))
 
     async with _make_client(handler) as client:
         page = await client.pages.update(
             "page-123",
-            archived=True,
+            is_archived=True,
             icon={"type": "emoji", "emoji": "🔥"},
         )
 
     assert seen["method"] == "PATCH"
     assert seen["path"] == "/v1/pages/page-123"
     assert seen["body"] == {
-        "archived": True,
+        "is_archived": True,
         "icon": {"type": "emoji", "emoji": "🔥"},
     }
-    assert page.archived is True
+    assert page.is_archived is True
 
 
 async def test_update_supports_in_trash_and_properties() -> None:
@@ -335,6 +335,183 @@ async def test_retrieve_property_returns_async_iterator_type() -> None:
 
     assert len(items) == 1
     assert items[0].type == "relation"
+
+
+def _markdown_payload(
+    *,
+    page_id: str = "page-123",
+    markdown: str = "# Hello\n\nWorld",
+    truncated: bool = False,
+    unknown: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "object": "page_markdown",
+        "id": page_id,
+        "markdown": markdown,
+        "truncated": truncated,
+        "unknown_block_ids": unknown or [],
+    }
+
+
+async def test_create_from_markdown_posts_markdown_field() -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_page_payload())
+
+    async with _make_client(handler) as client:
+        page = await client.pages.create_from_markdown(
+            parent=PageParent(page_id="parent-1"),
+            markdown="# Title\n\nBody paragraph.",
+        )
+
+    assert seen["method"] == "POST"
+    assert seen["path"] == "/v1/pages"
+    assert seen["body"] == {
+        "parent": {"type": "page_id", "page_id": "parent-1"},
+        "markdown": "# Title\n\nBody paragraph.",
+    }
+    assert isinstance(page, PageObject)
+    assert page.id == "page-123"
+
+
+async def test_create_from_markdown_serializes_properties() -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_page_payload())
+
+    async with _make_client(handler) as client:
+        await client.pages.create_from_markdown(
+            parent={"type": "page_id", "page_id": "parent-1"},
+            markdown="Body",
+            properties={
+                "title": {"title": [{"text": {"content": "explicit title"}}]}
+            },
+        )
+
+    assert seen["body"]["markdown"] == "Body"
+    assert seen["body"]["properties"]["title"]["title"][0]["text"]["content"] == (
+        "explicit title"
+    )
+    assert "children" not in seen["body"]
+
+
+async def test_retrieve_markdown_returns_page_markdown() -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["params"] = dict(request.url.params)
+        return httpx.Response(
+            200,
+            json=_markdown_payload(
+                markdown="# h1\n\npara",
+                unknown=["block-xyz"],
+            ),
+        )
+
+    async with _make_client(handler) as client:
+        result = await client.pages.retrieve_markdown("page-123")
+
+    assert seen["method"] == "GET"
+    assert seen["path"] == "/v1/pages/page-123/markdown"
+    assert seen["params"] == {}
+    assert isinstance(result, PageMarkdown)
+    assert result.id == "page-123"
+    assert result.markdown == "# h1\n\npara"
+    assert result.truncated is False
+    assert result.unknown_block_ids == ["block-xyz"]
+
+
+async def test_retrieve_markdown_forwards_include_transcript() -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["params"] = dict(request.url.params)
+        return httpx.Response(200, json=_markdown_payload())
+
+    async with _make_client(handler) as client:
+        await client.pages.retrieve_markdown("page-123", include_transcript=True)
+
+    assert seen["params"] == {"include_transcript": "true"}
+
+
+async def test_update_markdown_sends_update_content_body() -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_markdown_payload(markdown="# Updated"))
+
+    updates = [
+        {"old_str": "foo", "new_str": "bar"},
+        {"old_str": "x", "new_str": "y", "replace_all_matches": True},
+    ]
+    async with _make_client(handler) as client:
+        result = await client.pages.update_markdown(
+            "page-123",
+            updates,
+            allow_deleting_content=True,
+        )
+
+    assert seen["method"] == "PATCH"
+    assert seen["path"] == "/v1/pages/page-123/markdown"
+    assert seen["body"] == {
+        "type": "update_content",
+        "update_content": {"content_updates": updates},
+        "allow_deleting_content": True,
+    }
+    assert isinstance(result, PageMarkdown)
+    assert result.markdown == "# Updated"
+
+
+async def test_update_markdown_omits_allow_deleting_content_when_unset() -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_markdown_payload())
+
+    async with _make_client(handler) as client:
+        await client.pages.update_markdown(
+            "page-123",
+            [{"old_str": "a", "new_str": "b"}],
+        )
+
+    assert "allow_deleting_content" not in seen["body"]
+
+
+async def test_replace_markdown_sends_replace_content_body() -> None:
+    seen: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_markdown_payload(markdown="# Whole new doc"))
+
+    async with _make_client(handler) as client:
+        result = await client.pages.replace_markdown(
+            "page-123",
+            "# Whole new doc\n\nBody.",
+        )
+
+    assert seen["method"] == "PATCH"
+    assert seen["path"] == "/v1/pages/page-123/markdown"
+    assert seen["body"] == {
+        "type": "replace_content",
+        "replace_content": {"new_str": "# Whole new doc\n\nBody."},
+    }
+    assert isinstance(result, PageMarkdown)
+    assert result.markdown == "# Whole new doc"
 
 
 @pytest.mark.parametrize("missing", ["properties", "children", "icon", "cover"])

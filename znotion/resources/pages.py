@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from znotion.http import Transport
-from znotion.models.pages import PageObject, PropertyItem
+from znotion.models.pages import PageMarkdown, PageObject, PropertyItem
 from znotion.pagination import Page
 
 
@@ -61,18 +61,21 @@ class PagesResource:
         page_id: str,
         *,
         properties: dict[str, Any] | None = None,
-        archived: bool | None = None,
+        is_archived: bool | None = None,
         in_trash: bool | None = None,
+        is_locked: bool | None = None,
         icon: Any | None = None,
         cover: Any | None = None,
     ) -> PageObject:
         body: dict[str, Any] = {}
         if properties is not None:
             body["properties"] = _serialize_props(properties)
-        if archived is not None:
-            body["archived"] = archived
+        if is_archived is not None:
+            body["is_archived"] = is_archived
         if in_trash is not None:
             body["in_trash"] = in_trash
+        if is_locked is not None:
+            body["is_locked"] = is_locked
         if icon is not None:
             body["icon"] = _serialize(icon)
         if cover is not None:
@@ -138,6 +141,99 @@ class PagesResource:
             first_page = Page[PropertyItem].model_validate(first_raw)
             return self._iter_property(page_id, property_id, first_page)
         return PropertyItem.model_validate(first_raw)
+
+    async def create_from_markdown(
+        self,
+        *,
+        parent: Any,
+        markdown: str,
+        properties: dict[str, Any] | None = None,
+    ) -> PageObject:
+        """Create a page whose body is rendered from a markdown string.
+
+        Uses the ``markdown`` body field on ``POST /v1/pages`` which is
+        mutually exclusive with ``children``. If ``properties`` omits a
+        ``title``, Notion extracts the first ``# h1`` in ``markdown`` as the
+        page title.
+        """
+        body: dict[str, Any] = {
+            "parent": _serialize(parent),
+            "markdown": markdown,
+        }
+        if properties is not None:
+            body["properties"] = _serialize_props(properties)
+        data = await self._transport.post("/pages", json=body)
+        return PageObject.model_validate(data)
+
+    async def retrieve_markdown(
+        self,
+        page_id: str,
+        *,
+        include_transcript: bool | None = None,
+    ) -> PageMarkdown:
+        """Fetch a page rendered as markdown.
+
+        Returns the full page body serialized to markdown, with file URIs
+        replaced by pre-signed URLs. Unsupported block types surface as
+        ``<unknown url="..." alt="..."/>`` tags and their ids are listed in
+        ``unknown_block_ids``. ``truncated`` is set when the page exceeds the
+        server-side block limit.
+        """
+        params: dict[str, Any] = {}
+        if include_transcript is not None:
+            params["include_transcript"] = "true" if include_transcript else "false"
+        data = await self._transport.get(
+            f"/pages/{page_id}/markdown",
+            params=params or None,
+        )
+        return PageMarkdown.model_validate(data)
+
+    async def update_markdown(
+        self,
+        page_id: str,
+        content_updates: list[dict[str, Any]],
+        *,
+        allow_deleting_content: bool | None = None,
+    ) -> PageMarkdown:
+        """Apply targeted markdown edits via the ``update_content`` body type.
+
+        Each entry in ``content_updates`` is ``{"old_str": ..., "new_str":
+        ..., "replace_all_matches": bool?}``. ``old_str`` must match exactly
+        one location unless ``replace_all_matches`` is true. Pass
+        ``allow_deleting_content=True`` when an edit would delete child
+        pages or databases — Notion otherwise rejects the request.
+        """
+        body: dict[str, Any] = {
+            "type": "update_content",
+            "update_content": {"content_updates": content_updates},
+        }
+        if allow_deleting_content is not None:
+            body["allow_deleting_content"] = allow_deleting_content
+        data = await self._transport.patch(
+            f"/pages/{page_id}/markdown",
+            json=body,
+        )
+        return PageMarkdown.model_validate(data)
+
+    async def replace_markdown(
+        self,
+        page_id: str,
+        new_str: str,
+        *,
+        allow_deleting_content: bool | None = None,
+    ) -> PageMarkdown:
+        """Replace the entire page body with ``new_str`` (``replace_content``)."""
+        body: dict[str, Any] = {
+            "type": "replace_content",
+            "replace_content": {"new_str": new_str},
+        }
+        if allow_deleting_content is not None:
+            body["allow_deleting_content"] = allow_deleting_content
+        data = await self._transport.patch(
+            f"/pages/{page_id}/markdown",
+            json=body,
+        )
+        return PageMarkdown.model_validate(data)
 
     def _iter_property(
         self,

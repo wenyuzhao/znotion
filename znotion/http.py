@@ -10,7 +10,7 @@ import httpx
 from znotion.errors import NotionError
 
 DEFAULT_BASE_URL = "https://api.notion.com/v1"
-DEFAULT_NOTION_VERSION = "2022-06-28"
+DEFAULT_NOTION_VERSION = "2026-03-11"
 DEFAULT_TIMEOUT = 30.0
 
 

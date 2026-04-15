@@ -1,4 +1,9 @@
-"""Search resource — wraps the ``/v1/search`` endpoint."""
+"""Search resource — wraps the ``/v1/search`` endpoint.
+
+In Notion ``2025-09-03+`` search results are pages or data sources, not
+databases. The ``filter.value`` parameter accepts ``"page"`` or
+``"data_source"``.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from znotion.http import Transport
-from znotion.models.databases import DatabaseObject
+from znotion.models.data_sources import DataSourceObject
 from znotion.models.pages import PageObject
 from znotion.models.search import SearchResult
 from znotion.pagination import Page
@@ -29,7 +34,7 @@ class SearchResource:
         sort: dict[str, Any] | None = None,
         start_cursor: str | None = None,
         page_size: int | None = None,
-    ) -> Page[PageObject | DatabaseObject]:
+    ) -> Page[PageObject | DataSourceObject]:
         """Fetch a single page of search results."""
         body: dict[str, Any] = {}
         if query is not None:
@@ -52,15 +57,15 @@ class SearchResource:
         filter: dict[str, Any] | None = None,  # noqa: A002
         sort: dict[str, Any] | None = None,
         page_size: int | None = None,
-    ) -> AsyncIterator[PageObject | DatabaseObject]:
-        """Search across pages and databases, auto-paginating the results.
+    ) -> AsyncIterator[PageObject | DataSourceObject]:
+        """Search across pages and data sources, auto-paginating the results.
 
-        Returns an async iterator that walks every matching page or database.
-        Use :meth:`search_page` if you want a single page and manual cursor
-        control.
+        Returns an async iterator that walks every matching page or data
+        source. Use :meth:`search_page` if you want a single page and manual
+        cursor control.
         """
 
-        async def gen() -> AsyncIterator[PageObject | DatabaseObject]:
+        async def gen() -> AsyncIterator[PageObject | DataSourceObject]:
             cursor: str | None = None
             while True:
                 page = await self.search_page(

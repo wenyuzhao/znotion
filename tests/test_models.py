@@ -458,8 +458,8 @@ def _page_sample() -> dict[str, Any]:
             "external": {"url": "https://example.com/cover.png"},
         },
         "icon": {"type": "emoji", "emoji": "📝"},
-        "parent": {"type": "database_id", "database_id": "db-abc"},
-        "archived": False,
+        "parent": {"type": "data_source_id", "data_source_id": "ds-abc"},
+        "is_archived": False,
         "in_trash": False,
         "url": "https://www.notion.so/Test-page-111",
         "public_url": None,
@@ -489,7 +489,7 @@ def test_page_object_roundtrip():
     reparsed = PageObject.model_validate(dumped)
     assert reparsed == parsed
     assert parsed.id == "11111111-1111-1111-1111-111111111111"
-    assert parsed.parent.database_id == "db-abc"
+    assert parsed.parent.data_source_id == "ds-abc"
     assert parsed.icon is not None
     assert isinstance(parsed.icon, EmojiObject)
     assert parsed.properties["Name"].type == "title"
@@ -531,23 +531,12 @@ def _database_sample() -> dict[str, Any]:
         "parent": {"type": "page_id", "page_id": "parent-page"},
         "url": "https://www.notion.so/Tasks-222",
         "public_url": None,
-        "archived": False,
         "in_trash": False,
         "is_inline": False,
-        "properties": {
-            "Name": {"id": "title", "name": "Name", "type": "title", "title": {}},
-            "Status": {
-                "id": "status",
-                "name": "Status",
-                "type": "select",
-                "select": {
-                    "options": [
-                        {"id": "a", "name": "open", "color": "red"},
-                        {"id": "b", "name": "done", "color": "green"},
-                    ]
-                },
-            },
-        },
+        "is_locked": False,
+        "data_sources": [
+            {"id": "ds-1", "name": "Tasks"},
+        ],
     }
 
 
@@ -558,9 +547,10 @@ def test_database_object_roundtrip():
     reparsed = DatabaseObject.model_validate(dumped)
     assert reparsed == parsed
     assert parsed.id == "22222222-2222-2222-2222-222222222222"
+    assert parsed.parent is not None
     assert parsed.parent.page_id == "parent-page"
     assert parsed.title[0].plain_text == "Tasks"
-    assert parsed.properties["Status"].type == "select"
+    assert parsed.data_sources[0].id == "ds-1"
 
 
 def test_database_object_preserves_extra_fields():

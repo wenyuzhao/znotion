@@ -22,11 +22,27 @@ class PageObject(NotionModel):
     cover: Cover | None = None
     icon: Icon | None = None
     parent: Parent
-    archived: bool = False
+    is_archived: bool = False
     in_trash: bool = False
+    is_locked: bool = False
     properties: dict[str, PropertyValue] = Field(default_factory=dict)
     url: str | None = None
     public_url: str | None = None
+
+
+class PageMarkdown(NotionModel):
+    """Markdown view of a page returned by the markdown endpoints.
+
+    Shape: ``{"object": "page_markdown", "id": ..., "markdown": ...,
+    "truncated": bool, "unknown_block_ids": [...]}``. File URIs embedded in
+    ``markdown`` are pre-signed URLs when fetched from the Notion API.
+    """
+
+    object: Literal["page_markdown"] = "page_markdown"
+    id: str
+    markdown: str
+    truncated: bool = False
+    unknown_block_ids: list[str] = Field(default_factory=list)
 
 
 class PropertyItem(NotionModel):

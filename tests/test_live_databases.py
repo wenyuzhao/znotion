@@ -1,8 +1,13 @@
-"""Live integration tests for the Databases resource.
+"""Live integration tests for the Databases / Data Sources resources.
 
 Skipped automatically when ``NOTION_TOKEN`` / ``NOTION_TEST_PAGE_ID`` are not
 set. Every mutation is confined to descendants of ``NOTION_TEST_PAGE_ID``;
-created databases and their child pages are archived in fixture teardown.
+created databases and their child pages are moved to the trash in fixture
+teardown.
+
+In Notion ``2025-09-03+`` a database is a container for data sources, and all
+schema / query operations happen on the data source. These tests exercise the
+full ``databases.create`` → ``data_sources.retrieve/update/query`` pipeline.
 """
 
 from __future__ import annotations
@@ -11,7 +16,13 @@ from typing import Any
 
 import pytest
 
-from znotion import DatabaseObject, NotionClient, Page, PageObject
+from znotion import (
+    DatabaseObject,
+    DataSourceObject,
+    NotionClient,
+    Page,
+    PageObject,
+)
 
 pytestmark = [pytest.mark.live, pytest.mark.asyncio(loop_scope="session")]
 
@@ -55,7 +66,8 @@ async def test_databases_full_lifecycle(
     created_databases: list[str],
     created_pages: list[str],
 ) -> None:
-    """Create → retrieve → update → insert → query (filter+sort, paginated)."""
+    """Create database → retrieve → update → fetch data source → insert rows →
+    query (filter + sort, paginated)."""
     created = await notion.databases.create(
         parent={"type": "page_id", "page_id": test_page_id},
         title=_rich_text("znotion live test db"),
@@ -66,24 +78,35 @@ async def test_databases_full_lifecycle(
     assert created.id
     created_databases.append(created.id)
     assert created.is_inline is True
-    assert set(created.properties).issuperset(
-        {"Name", "Notes", "Count", "Tag", "Done", "When"},
-    )
+    assert len(created.data_sources) >= 1
+    data_source_id = created.data_sources[0].id
 
     fetched = await notion.databases.retrieve(created.id)
     assert isinstance(fetched, DatabaseObject)
     assert fetched.id == created.id
+    assert any(ds.id == data_source_id for ds in fetched.data_sources)
 
-    updated = await notion.databases.update(
+    updated_db = await notion.databases.update(
         created.id,
         title=_rich_text("znotion live test db (renamed)"),
+    )
+    assert isinstance(updated_db, DatabaseObject)
+    title_dump = [t.model_dump(mode="json", exclude_none=True) for t in updated_db.title]
+    assert any("renamed" in (t.get("plain_text") or "") for t in title_dump)
+
+    data_source = await notion.data_sources.retrieve(data_source_id)
+    assert isinstance(data_source, DataSourceObject)
+    assert set(data_source.properties).issuperset(
+        {"Name", "Notes", "Count", "Tag", "Done", "When"},
+    )
+
+    updated_ds = await notion.data_sources.update(
+        data_source_id,
         properties={"Extra": {"rich_text": {}}},
     )
-    assert isinstance(updated, DatabaseObject)
-    assert "Extra" in updated.properties
-    assert updated.properties["Extra"].type == "rich_text"
-    title_dump = [t.model_dump(mode="json", exclude_none=True) for t in updated.title]
-    assert any("renamed" in (t.get("plain_text") or "") for t in title_dump)
+    assert isinstance(updated_ds, DataSourceObject)
+    assert "Extra" in updated_ds.properties
+    assert updated_ds.properties["Extra"].type == "rich_text"
 
     rows = [
         ("Row 1", 1, "alpha", False, "2026-01-01"),
@@ -93,7 +116,7 @@ async def test_databases_full_lifecycle(
     inserted_ids: list[str] = []
     for name, count, tag, done, when in rows:
         page = await notion.pages.create(
-            parent={"type": "database_id", "database_id": created.id},
+            parent={"type": "data_source_id", "data_source_id": data_source_id},
             properties=_row_props(name=name, count=count, tag=tag, done=done, when=when),
         )
         assert isinstance(page, PageObject)
@@ -105,8 +128,8 @@ async def test_databases_full_lifecycle(
     query_sorts = [{"property": "Count", "direction": "ascending"}]
 
     iterated: list[PageObject] = []
-    async for item in notion.databases.query(
-        created.id,
+    async for item in notion.data_sources.query(
+        data_source_id,
         filter=query_filter,
         sorts=query_sorts,
     ):
@@ -115,8 +138,8 @@ async def test_databases_full_lifecycle(
     counts = [p.properties["Count"].model_dump(mode="json", exclude_none=True) for p in iterated]
     assert [c.get("number") for c in counts] == [1, 2, 3]
 
-    first_page = await notion.databases.query_page(
-        created.id,
+    first_page = await notion.data_sources.query_page(
+        data_source_id,
         filter=query_filter,
         sorts=query_sorts,
         page_size=2,
@@ -127,8 +150,8 @@ async def test_databases_full_lifecycle(
     assert first_page.next_cursor is not None
 
     paginated: list[PageObject] = []
-    async for item in notion.databases.query(
-        created.id,
+    async for item in notion.data_sources.query(
+        data_source_id,
         filter=query_filter,
         sorts=query_sorts,
         page_size=2,

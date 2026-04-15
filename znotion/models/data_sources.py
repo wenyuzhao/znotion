@@ -1,9 +1,8 @@
-"""Database object model (Notion API 2025-09-03+).
+"""Data source object model (Notion API 2025-09-03+).
 
-A database is now a thin container whose schema lives on one or more
-:class:`~znotion.models.data_sources.DataSourceObject` children. The inline
-``properties`` map was removed — use
-``client.data_sources.retrieve(data_source_id)`` to fetch a schema.
+Data sources replaced the inline database schema: a database now contains a
+list of data sources, each with its own property schema. Queries and schema
+operations all live on the data source, not the database.
 """
 
 from typing import Literal
@@ -13,20 +12,14 @@ from pydantic import Field
 from znotion.models.common import NotionModel, PartialUser
 from znotion.models.files import Cover, Icon
 from znotion.models.parent import Parent
+from znotion.models.properties import PropertySchema
 from znotion.models.rich_text import RichText
 
 
-class DataSourceRef(NotionModel):
-    """Lightweight reference to a data source inside a database."""
+class DataSourceObject(NotionModel):
+    """Notion data source object returned by the Data Sources endpoints."""
 
-    id: str
-    name: str | None = None
-
-
-class DatabaseObject(NotionModel):
-    """Notion database object returned by the Databases endpoints."""
-
-    object: Literal["database"] = "database"
+    object: Literal["data_source"] = "data_source"
     id: str
     created_time: str | None = None
     last_edited_time: str | None = None
@@ -36,10 +29,10 @@ class DatabaseObject(NotionModel):
     description: list[RichText] = Field(default_factory=list)
     icon: Icon | None = None
     cover: Cover | None = None
-    data_sources: list[DataSourceRef] = Field(default_factory=list)
+    properties: dict[str, PropertySchema] = Field(default_factory=dict)
     parent: Parent | None = None
+    database_parent: Parent | None = None
     url: str | None = None
     public_url: str | None = None
     in_trash: bool = False
     is_inline: bool = False
-    is_locked: bool = False

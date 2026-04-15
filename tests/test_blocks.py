@@ -32,7 +32,6 @@ def _block_payload(
         "last_edited_time": "2024-01-02T00:00:00.000Z",
         "created_by": {"object": "user", "id": "u1"},
         "last_edited_by": {"object": "user", "id": "u2"},
-        "archived": False,
         "in_trash": False,
         "has_children": has_children,
         "type": block_type,
@@ -152,14 +151,14 @@ async def test_update_patches_with_provided_fields() -> None:
         block = await client.blocks.update(
             "block-1",
             paragraph={"rich_text": [{"type": "text", "text": {"content": "x"}}]},
-            archived=False,
+            in_trash=False,
         )
 
     assert seen["method"] == "PATCH"
     assert seen["path"] == "/v1/blocks/block-1"
     assert seen["body"] == {
         "paragraph": {"rich_text": [{"type": "text", "text": {"content": "x"}}]},
-        "archived": False,
+        "in_trash": False,
     }
     assert isinstance(block, ParagraphBlock)
 

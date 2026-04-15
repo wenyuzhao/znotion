@@ -12,6 +12,11 @@ class DatabaseParent(NotionModel):
     database_id: str
 
 
+class DataSourceParent(NotionModel):
+    type: Literal["data_source_id"] = "data_source_id"
+    data_source_id: str
+
+
 class PageParent(NotionModel):
     type: Literal["page_id"] = "page_id"
     page_id: str
@@ -28,6 +33,6 @@ class BlockParent(NotionModel):
 
 
 Parent = Annotated[
-    DatabaseParent | PageParent | WorkspaceParent | BlockParent,
+    DatabaseParent | DataSourceParent | PageParent | WorkspaceParent | BlockParent,
     Field(discriminator="type"),
 ]

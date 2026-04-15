@@ -10,14 +10,21 @@ An async Python SDK for the [Notion API](https://developers.notion.com/reference
   iterator that walks every result.
 - Typed errors: non-2xx responses raise a `NotionError` subclass (auth, not-found, rate-limit, …).
 
-Requires Python 3.14+. Notion API version `2022-06-28`.
+Requires Python 3.14+. Notion API version `2026-03-11`.
 
 ## Scope
 
-In scope: Pages, Databases, Blocks, Comments, Search, File Uploads.
+In scope: Pages, Databases, Data Sources, Blocks, Comments, Search, File Uploads.
 
 Out of scope (intentionally): the Users API and OAuth endpoints. Authenticate with a Notion
 [internal integration token](https://developers.notion.com/docs/create-a-notion-integration).
+
+Notion's `2025-09-03+` releases split databases and data sources: a database is a thin container
+whose property schema and query endpoint live on its data source(s). `client.databases` creates,
+retrieves and updates the container; `client.data_sources` handles schema and row queries. Page
+parents inside a database use `{"type": "data_source_id", "data_source_id": ...}` — not
+`"database_id"` — and `databases.create(properties=...)` is automatically wrapped under
+`initial_data_source.properties`.
 
 ## Install
 
@@ -81,11 +88,17 @@ async with NotionClient() as notion:
 All examples below assume a `notion = NotionClient()` bound at module or function scope (wrap
 in `async with NotionClient() as notion:` if you want connection pooling).
 
-### Create a page
+### Create a page in a database
+
+Notion page creation inside a database targets the *data source*, not the database container.
+If you already have a `DatabaseObject`, its `data_sources[0].id` is the id to use:
 
 ```python
+database = await notion.databases.retrieve("DATABASE_ID")
+data_source_id = database.data_sources[0].id
+
 page = await notion.pages.create(
-    parent={"database_id": "DATABASE_ID"},
+    parent={"type": "data_source_id", "data_source_id": data_source_id},
     properties={
         "Name": {"title": [{"text": {"content": "Hello from znotion"}}]},
         "Status": {"select": {"name": "In progress"}},
@@ -102,11 +115,11 @@ page = await notion.pages.create(
 )
 ```
 
-### Query a database (auto-pagination)
+### Query a data source (auto-pagination)
 
 ```python
-async for row in notion.databases.query(
-    "DATABASE_ID",
+async for row in notion.data_sources.query(
+    data_source_id,
     filter={"property": "Status", "select": {"equals": "In progress"}},
     sorts=[{"timestamp": "created_time", "direction": "descending"}],
 ):
@@ -116,15 +129,37 @@ async for row in notion.databases.query(
 Use `query_page(...)` instead if you want manual cursor control:
 
 ```python
-page = await notion.databases.query_page("DATABASE_ID", page_size=25)
+page = await notion.data_sources.query_page(data_source_id, page_size=25)
 for row in page.results:
     print(row.id)
 if page.has_more:
-    next_page = await notion.databases.query_page(
-        "DATABASE_ID",
+    next_page = await notion.data_sources.query_page(
+        data_source_id,
         page_size=25,
         start_cursor=page.next_cursor,
     )
+```
+
+### Create a database
+
+`properties` describes the initial data source schema — znotion wraps it under
+`initial_data_source.properties` for you:
+
+```python
+database = await notion.databases.create(
+    parent={"type": "page_id", "page_id": "PARENT_PAGE_ID"},
+    title=[{"type": "text", "text": {"content": "Tasks"}}],
+    properties={
+        "Name": {"title": {}},
+        "Status": {"select": {"options": [{"name": "Todo"}, {"name": "Done"}]}},
+    },
+)
+# Row inserts and schema edits go through the data source:
+data_source_id = database.data_sources[0].id
+await notion.data_sources.update(
+    data_source_id,
+    properties={"Priority": {"number": {"format": "number"}}},
+)
 ```
 
 ### Append blocks
@@ -155,6 +190,9 @@ async for block in notion.blocks.children("PAGE_OR_BLOCK_ID"):
 ```
 
 ### Search
+
+Notion search returns pages and data sources. The `filter.value` field accepts `"page"` or
+`"data_source"`:
 
 ```python
 async for result in notion.search.search(

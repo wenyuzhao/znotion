@@ -3,9 +3,9 @@
 Skipped automatically when ``NOTION_TOKEN`` / ``NOTION_TEST_PAGE_ID`` are not
 set. Creates a uniquely-titled child page under the test page and exercises
 both the unfiltered iterator and the ``{"property": "object", "value":
-"database"}`` filter. Notion's search index is eventually consistent, so the
-query-title lookup retries for a bounded window and emits a warning (rather
-than failing) if the page never appears.
+"data_source"}`` filter. Notion's search index is eventually consistent, so
+the query-title lookup retries for a bounded window and emits a warning
+(rather than failing) if the page never appears.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import warnings
 
 import pytest
 
-from znotion import DatabaseObject, NotionClient, PageObject
+from znotion import DataSourceObject, NotionClient, PageObject
 
 pytestmark = [pytest.mark.live, pytest.mark.asyncio(loop_scope="session")]
 
@@ -65,32 +65,32 @@ async def test_search_finds_created_page_by_unique_title(
     assert found.object == "page"
 
 
-async def test_search_filter_databases_only_returns_databases(
+async def test_search_filter_data_sources_only_returns_data_sources(
     notion: NotionClient,
     test_page_id: str,
 ) -> None:
-    """The ``object=database`` filter must only yield ``DatabaseObject`` results."""
+    """The ``object=data_source`` filter must only yield ``DataSourceObject`` results."""
     # Sanity check the single-page form as well — it should return
-    # ``Page[PageObject | DatabaseObject]`` but every ``results`` element
-    # should be a database when the filter is set.
+    # ``Page[PageObject | DataSourceObject]`` but every ``results`` element
+    # should be a data source when the filter is set.
     single = await notion.search.search_page(
-        filter={"property": "object", "value": "database"},
+        filter={"property": "object", "value": "data_source"},
         page_size=10,
     )
     for result in single.results:
-        assert isinstance(result, DatabaseObject)
-        assert result.object == "database"
+        assert isinstance(result, DataSourceObject)
+        assert result.object == "data_source"
 
     seen = 0
     async for result in notion.search.search(
-        filter={"property": "object", "value": "database"},
+        filter={"property": "object", "value": "data_source"},
         page_size=10,
     ):
-        assert isinstance(result, DatabaseObject)
-        assert result.object == "database"
+        assert isinstance(result, DataSourceObject)
+        assert result.object == "data_source"
         seen += 1
         if seen >= _FILTER_SCAN_LIMIT:
             break
     # We don't assert seen > 0 — the workspace might legitimately contain no
-    # databases the integration can see. The type invariant is what matters.
+    # data sources the integration can see. The type invariant is what matters.
     assert test_page_id  # keep fixture dependency explicit

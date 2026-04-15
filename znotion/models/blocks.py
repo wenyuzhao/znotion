@@ -28,7 +28,6 @@ class _BlockBase(NotionModel):
     last_edited_time: str | None = None
     created_by: PartialUser | None = None
     last_edited_by: PartialUser | None = None
-    archived: bool = False
     in_trash: bool = False
     has_children: bool = False
 
